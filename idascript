@@ -1,0 +1,134 @@
+#!/usr/bin/env python2
+
+# created by zTrix@blue-lotus
+# note that this script is for mac version IDA Pro only
+# you will need to modify it if you want it on other platforms
+
+import os, sys, pty, subprocess, tempfile, tty, select, errno
+
+# change the following line to fit your installation
+# the directory must contains `idaq`, `idaq64`
+IDA_PATH = '/Applications/IDA Pro 6.5/idaq.app/Contents/MacOS/'
+
+if not os.path.exists(IDA_PATH) or not os.path.exists(os.path.join(IDA_PATH, 'idaq')):
+    print 'error: IDA not found at %s, where did you install it?' % IDA_PATH
+
+if len(sys.argv) == 1 or not os.path.exists(sys.argv[1]):
+    print ""
+    print "Usage: %s [idb|i64 file] <ida script file> [script arguments]" % os.path.basename(sys.argv[0])
+    print ""
+    sys.exit(10)
+
+# Get IDB / script file from command line
+if (sys.argv[1].endswith('.idb') or sys.argv[1].endswith('.i64')) and len(sys.argv) >= 3:
+    idb = os.path.abspath(sys.argv[1])
+    idc = os.path.abspath(sys.argv[2])
+    idc_args = sys.argv[3:]
+else:
+    idc = os.path.abspath(sys.argv[1])
+    idb = "-t"
+    idc_args = sys.argv[2:]
+
+ida = 'idaq'
+# dont use idal although it's recommened 
+#if os.path.exists(os.path.join(IDA_PATH, 'idal')):
+#    ida = 'idal'
+#else:
+#    ida = 'idaq'
+
+if idb.endswith('.i64'):
+    ida += "64"
+
+import pty
+master_fd, slave_fd = pty.openpty()
+ttyname = os.ttyname(slave_fd)
+
+temp_dir = tempfile.mkdtemp()
+wrapper = """
+import os, sys
+
+import idc
+
+from idc import *
+
+open('/tmp/xxxxxxx', 'w').write('asdf')
+
+# TODO: append ida user scripts dir
+# sys.path.append()
+
+sys.argv = idc.ARGV
+sys.exit = idc.Exit
+
+class ptyio(object):
+    def __init__(self, ptyfile):
+        self.out = open(ptyfile, 'r+')
+
+    def write(self, s):
+        self.out.write(s)
+
+    def flush(self, s):
+        self.out.flush()
+
+    def isatty(self):
+        return True
+
+    def __del__(self):
+        self.out.close()
+
+sys.stdout = sys.stderr = ptyio('###ttyname###')
+
+execfile('###userscript###')
+
+sys.exit(0)
+"""
+
+wrapper_fp = os.path.join(temp_dir, 'wrapper.py')
+open(wrapper_fp, 'w').write(wrapper.replace('###ttyname###', ttyname).replace('###userscript###', idc) )
+
+args = [os.path.join(IDA_PATH, ida), '-A', '-S' + wrapper_fp  + ' ' + ' '.join(idc_args), idb]
+
+print ' '.join(args)
+# Run IDA
+# for IDA commandline switches, https://www.hex-rays.com/products/ida/support/idadoc/417.shtml
+proc = subprocess.Popen(args)
+
+try:
+    mode = tty.tcgetattr(pty.STDIN_FILENO)
+    tty.setraw(pty.STDIN_FILENO)
+
+    while proc.poll() == None:
+        r, w, e = select.select([pty.STDIN_FILENO, master_fd], [], [], 0.1)
+        if master_fd in r:
+            try:
+                data = None
+                data = os.read(master_fd, 1024)
+            except OSError, err:
+                if err.errno != errno.EIO:
+                    raise
+            if data is not None:
+                os.write(pty.STDOUT_FILENO, data)
+        if pty.STDIN_FILENO in r:
+            try:
+                data = None
+                data = os.read(pty.STDIN_FILENO, 1024)
+            except OSError, err:
+                if err.errno != errno.EIO:
+                    raise
+            if data is not None:
+                i = data.rfind(chr(29))             # escape character
+                if i != -1: data = data[:i]
+                while data != b'' and proc.poll() == None:
+                    n = os.write(master_fd, data)
+                    data = data[n:]
+                if i != -1:
+                    break
+    proc.wait()
+finally:
+    tty.tcsetattr(pty.STDIN_FILENO, tty.TCSAFLUSH, mode)
+
+os.unlink(wrapper_fp)
+
+if proc.returncode == 4:
+    print >> sys.stderr, 'error: the db file is already opened by another ida instance, please close it first'
+sys.exit(proc.returncode)
+
