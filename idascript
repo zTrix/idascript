@@ -10,8 +10,23 @@ import os, sys, pty, subprocess, tempfile, tty, select, errno
 # the directory must contains `idaq`, `idaq64`
 IDA_PATH = '/Applications/IDA Pro 6.5/idaq.app/Contents/MacOS/'
 
+try:
+    from termcolor import colored
+except:
+    def colored(text, color=None, on_color=None, attrs=None):
+        return text
+
+def log(s, color = None, on_color = None, attrs = None, new_line = True):
+    if not color:
+        print >> sys.stderr, str(s),
+    else:
+        print >> sys.stderr, colored(str(s), color, on_color, attrs),
+    if new_line:
+        sys.stderr.write('\r\n')        # \r is needed to return to begin of line in raw mode 
+    sys.stderr.flush()
+
 if not os.path.exists(IDA_PATH) or not os.path.exists(os.path.join(IDA_PATH, 'idaq')):
-    print 'error: IDA not found at %s, where did you install it?' % IDA_PATH
+    log('error: IDA not found at %s, where did you install it?' % IDA_PATH, 'red')
 
 if len(sys.argv) == 1 or not os.path.exists(sys.argv[1]):
     print ""
@@ -45,7 +60,10 @@ master_fd, slave_fd = pty.openpty()
 
 ttyname = os.ttyname(slave_fd)
 
-os.close(slave_fd)
+try:
+    os.close(slave_fd)
+except OSError:
+    log('warning: fail to close slave_fd(fd = %d)' % slave_fd, 'yellow')
 
 temp_dir = tempfile.mkdtemp()
 wrapper = """
@@ -91,7 +109,7 @@ open(wrapper_fp, 'w').write(wrapper.replace('###ttyname###', ttyname).replace('#
 
 args = [os.path.join(IDA_PATH, ida), '-A', '-S' + wrapper_fp  + ' ' + ' '.join(idc_args), idb]
 
-print >> sys.stderr, ' '.join(args)
+log(' '.join(args), 'cyan')
 sys.stderr.flush()
 
 # for IDA commandline switches, https://www.hex-rays.com/products/ida/support/idadoc/417.shtml
@@ -128,13 +146,33 @@ try:
                 if i != -1:
                     break
     proc.wait()
+except OSError, err:
+    if err.errno == errno.EIO:
+        # recv Ctrl-C, child already exits
+        log('child process interrupted', 'yellow')
+    else:
+        proc.terminate()
 finally:
     tty.tcsetattr(pty.STDIN_FILENO, tty.TCSAFLUSH, mode)
 
-os.unlink(wrapper_fp)
+try:
+    os.close(master_fd)
+except OSError:
+    log('warning: fail to close pty master', 'yellow')
+    pass
+try:
+    os.unlink(wrapper_fp)
+except OSError:
+    log('warning: fail to delete temp file: %s' % wrapper_fp, 'yellow')
+    pass
+try:
+    os.rmdir(temp_dir)
+except OSError:
+    log('warning: fail to rmdir temp dir: %s' % temp_dir, 'yellow')
+    pass
 
 if proc.returncode == 4:
-    print >> sys.stderr, 'error: the db file is already opened by another ida instance, please close it first'
+    log('error: the db file is already opened by another ida instance, please close it first', 'red')
     sys.stderr.flush()
 sys.exit(proc.returncode)
 

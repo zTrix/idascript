@@ -18,3 +18,12 @@ The result is like this.
 # Configuration
 
 Just change the `IDA_PATH` variable to your installation path.
+
+# Dependency
+
+- python2
+- termcolor(optional)
+
+if you need colored output, install `termcolor` beforehand
+
+    $ sudo pip install termcolor
