@@ -7,6 +7,8 @@
 
 Console mode IDA script launcher with stdin/stdout handled. A pty is used to pass stdin/stdout, so you can directly view your stdout/stderr at the same terminal. There is no need to write to file and cat it later.
 
+Inspired by [hexray blog](http://www.hexblog.com/?p=128) and [https://code.google.com/p/idascript/](https://code.google.com/p/idascript/)
+
 # Example
 
     $ idascript your.idb example.py 
