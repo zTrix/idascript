@@ -11,6 +11,10 @@ Console mode IDA script launcher with stdin/stdout handled. A pty is used to pas
 
     $ idascript your.idb example.py 
 
+The result is like this.
+
+![Example Screenshot](scrot.png)
+
 # Configuration
 
 Just change the `IDA_PATH` variable to your installation path.

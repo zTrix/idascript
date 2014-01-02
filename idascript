@@ -30,7 +30,8 @@ else:
     idc_args = sys.argv[2:]
 
 ida = 'idaq'
-# dont use idal although it's recommened 
+
+# dont use idal although it's recommened, I tested idal for several times, it totally does not work at all
 #if os.path.exists(os.path.join(IDA_PATH, 'idal')):
 #    ida = 'idal'
 #else:
@@ -41,7 +42,10 @@ if idb.endswith('.i64'):
 
 import pty
 master_fd, slave_fd = pty.openpty()
+
 ttyname = os.ttyname(slave_fd)
+
+os.close(slave_fd)
 
 temp_dir = tempfile.mkdtemp()
 wrapper = """
@@ -87,8 +91,9 @@ open(wrapper_fp, 'w').write(wrapper.replace('###ttyname###', ttyname).replace('#
 
 args = [os.path.join(IDA_PATH, ida), '-A', '-S' + wrapper_fp  + ' ' + ' '.join(idc_args), idb]
 
-print ' '.join(args)
-# Run IDA
+print >> sys.stderr, ' '.join(args)
+sys.stderr.flush()
+
 # for IDA commandline switches, https://www.hex-rays.com/products/ida/support/idadoc/417.shtml
 proc = subprocess.Popen(args)
 
@@ -130,5 +135,6 @@ os.unlink(wrapper_fp)
 
 if proc.returncode == 4:
     print >> sys.stderr, 'error: the db file is already opened by another ida instance, please close it first'
+    sys.stderr.flush()
 sys.exit(proc.returncode)
 

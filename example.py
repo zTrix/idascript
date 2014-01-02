@@ -1,9 +1,9 @@
 
-print 'hello'
+import sys
 
-ea = BeginEA()
-for funcea in Functions(SegStart(ea), SegEnd(ea)):
-    functionName = GetFunctionName(funcea)
-    print functionName
+print 'hello, begin listing functions'
+
+for funcea in Functions():
+    print GetFunctionName(funcea)
 
 print 'good bye'
