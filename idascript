@@ -6,9 +6,8 @@
 
 import os, sys, pty, subprocess, tempfile, tty, select, errno
 
-# change the following line to fit your installation
-# the directory must contains `idaq`, `idaq64`
-IDA_PATH = '/Applications/IDA Pro 6.5/idaq.app/Contents/MacOS/'
+# change the following line to point to your installation directory
+IDA_PATH = '/Applications/IDA Pro 6.5'
 
 try:
     from termcolor import colored
@@ -25,8 +24,17 @@ def log(s, color = None, on_color = None, attrs = None, new_line = True):
         sys.stderr.write('\r\n')        # \r is needed to return to begin of line in raw mode 
     sys.stderr.flush()
 
-if not os.path.exists(IDA_PATH) or not os.path.exists(os.path.join(IDA_PATH, 'idaq')):
+if not os.path.exists(IDA_PATH):
+    IDA_PATH = None
+    guess_path = ['/Applications/IDA Pro 6.6/', '/Applications/IDA Pro 6.5/', '/Applications/IDA Pro'] + map(lambda x: os.path.join('/Applications', x), os.listdir('/Applications/'))
+    for p in guess_path:
+        if os.path.exists(p) and p.lower().find('ida') > -1 and os.path.exists(os.path.join(p, 'idaq.app/Contents/MacOS/idaq')):
+            IDA_PATH = os.path.join(p, 'idaq.app/Contents/MacOS/')
+            break
+
+if not IDA_PATH or not os.path.exists(IDA_PATH) or not os.path.exists(os.path.join(IDA_PATH, 'idaq')):
     log('error: IDA not found at %s, where did you install it?' % IDA_PATH, 'red')
+    sys.exit(12)
 
 if len(sys.argv) == 1 or not os.path.exists(sys.argv[1]):
     print ""
