@@ -1,15 +1,11 @@
 
 # idascript
 
-[![endorse](http://api.coderwall.com/ztrix/endorsecount.png)](http://coderwall.com/ztrix)
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/zTrix/idascript/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
-
-Console mode IDA script launcher with stdin/stdout handled. A pty is used to pass stdin/stdout, so you can directly view your stdout/stderr at the same terminal. There is no need to write to file and cat it later.
+Console mode IDA script launcher with stdin/stdout handled. A pty is used to pass stdin/stdout, so you can directly view your stdout/stderr in the same terminal. There is no need to write to a file and cat it later.
 
 Inspired by [hexray blog](http://www.hexblog.com/?p=128) and [https://code.google.com/p/idascript/](https://code.google.com/p/idascript/)
 
-# Example
+## Example
 
     $ idascript your.idb example.py 
 
@@ -17,11 +13,20 @@ The result is like this.
 
 ![Example Screenshot](scrot.png)
 
-# Configuration
+## ida launcher
+
+ida is a script to launch IDA or IDA 64 from commandline.
+
+    $ ida mybin.exe
+    $ ida elf64  # will launch IDA Pro 64 if told elf64 by file command
+    $ ida xxx.idb
+    $ ida xxx.i64 # will launch IDA Pro 64
+
+## Configuration
 
 Just change the `IDA_PATH` variable to your installation path.
 
-# Dependency
+## Dependency
 
 - python2
 - termcolor(optional)
