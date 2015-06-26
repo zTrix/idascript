@@ -81,8 +81,6 @@ import idc
 
 from idc import *
 
-open('/tmp/xxxxxxx', 'w').write('asdf')
-
 # TODO: append ida user scripts dir
 # sys.path.append()
 
@@ -115,7 +113,7 @@ sys.exit(0)
 wrapper_fp = os.path.join(temp_dir, 'wrapper.py')
 open(wrapper_fp, 'w').write(wrapper.replace('###ttyname###', ttyname).replace('###userscript###', idc) )
 
-args = [os.path.join(IDA_PATH, ida), '-A', '-S' + wrapper_fp  + ' ' + ' '.join(idc_args), idb]
+args = [os.path.join(IDA_PATH, ida), '-A', '-S' + wrapper_fp + ' ' + ' '.join(idc_args), idb]
 
 log(' '.join(args), 'cyan')
 sys.stderr.flush()
