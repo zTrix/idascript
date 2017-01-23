@@ -26,7 +26,8 @@ def log(s, color = None, on_color = None, attrs = None, new_line = True):
 
 if not os.path.exists(IDA_PATH):
     IDA_PATH = None
-    guess_path = ['/Applications/IDA Pro 6.6/', '/Applications/IDA Pro 6.5/', '/Applications/IDA Pro'] + map(lambda x: os.path.join('/Applications', x), os.listdir('/Applications/'))
+    prefix = '/Applications/IDA Pro'
+    guess_path = [prefix + ' 6%s/' % x for x in map(lambda x:'.'+str(x), range(10,5,-1))] + [prefix] + map(lambda x: os.path.join('/Applications', x), os.listdir('/Applications/'))
     for p in guess_path:
         if os.path.exists(p) and p.lower().find('ida') > -1 and os.path.exists(os.path.join(p, 'idaq.app/Contents/MacOS/idaq')):
             IDA_PATH = os.path.join(p, 'idaq.app/Contents/MacOS/')
@@ -111,7 +112,8 @@ sys.exit(0)
 """
 
 wrapper_fp = os.path.join(temp_dir, 'wrapper.py')
-open(wrapper_fp, 'w').write(wrapper.replace('###ttyname###', ttyname).replace('###userscript###', idc) )
+wrapper_content = wrapper.replace('###ttyname###', ttyname).replace('###userscript###', idc)
+open(wrapper_fp, 'w').write(wrapper_content)
 
 args = [os.path.join(IDA_PATH, ida), '-A', '-S' + wrapper_fp + ' ' + ' '.join(idc_args), idb]
 
