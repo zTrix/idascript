@@ -1,14 +1,9 @@
 #!/usr/bin/env python2
 
-import os, sys, pty, subprocess, tempfile, tty, select, errno
-
 # created by zTrix@blue-lotus
-# note that this script is for mac version IDA Pro only
-# you will need to modify it if you want it on other platforms
+# note that this script only supports IDA for mac and wined IDA for linux
 
-# change the following line to point to your installation directory
-IDA_PATH = '/Applications/IDA Pro 6.5'
-
+import os, sys, subprocess
 try:
     from termcolor import colored
 except:
@@ -24,39 +19,41 @@ def log(s, color = None, on_color = None, attrs = None, new_line = True):
         sys.stderr.write('\r\n')        # \r is needed to return to begin of line in raw mode 
     sys.stderr.flush()
 
-if not os.path.exists(IDA_PATH):
-    IDA_PATH = None
-    prefix = '/Applications/IDA Pro'
-    guess_path = [prefix + ' 6%s/' % x for x in map(lambda x:'.'+str(x), range(10,5,-1))] + [prefix] + map(lambda x: os.path.join('/Applications', x), os.listdir('/Applications/'))
-    for p in guess_path:
-        if os.path.exists(p) and p.lower().find('ida') > -1 and os.path.exists(os.path.join(p, 'idaq.app/Contents/MacOS/idaq')):
-            IDA_PATH = os.path.join(p, 'idaq.app/Contents/MacOS/')
-            break
+def check_ida(ida_path, version='q'):   # version can be one of ['q', 'q64', 'w', 'w64', ...]
+    if not ida_path:
+        return None
+    if not os.path.exists(ida_path):
+        return None
+    for e in ['ida' + version, 'ida' + version + '.exe']:
+        if os.path.exists(os.path.join(ida_path, e)):
+            return os.path.join(ida_path, e)
+    return None
 
-if not IDA_PATH or not os.path.exists(IDA_PATH) or not os.path.exists(os.path.join(IDA_PATH, 'idaq')):
-    log('error: IDA not found at %s, where did you install it?' % IDA_PATH, 'red')
-    sys.exit(12)
+def guess_ida_installation():
+    if sys.platform == 'darwin':  # Mac OSX
+        prefix = '/Applications/IDA Pro'
+        guess_path = [prefix + ' 6%s/' % x for x in map(lambda x:'.'+str(x), range(10,0,-1))] + [prefix] + map(lambda x: os.path.join('/Applications', x), os.listdir('/Applications/'))
+        for p in guess_path:
+            if os.path.exists(p) and p.lower().find('ida') > -1 and os.path.exists(os.path.join(p, 'idaq.app/Contents/MacOS/idaq')):
+                return os.path.join(p, 'idaq.app/Contents/MacOS/')
+    elif 'linux' in sys.platform: # wined IDA in Linux
+        for home in [os.environ.get('HOME', '/'), '/usr/local/bin']:
+            for pf in ['Program Files (x86)', 'Program Files', '']:
+                for prefix in ['IDA', 'IDA Pro']:
+                    for version in [prefix + ' 6%s/' % x for x in map(lambda x:'.'+str(x), range(10,0,-1))] + [prefix]:
+                        ida_path = os.path.join(home, '.wine/drive_c', pf, version)
+                        if check_ida(ida_path):
+                            return ida_path
+    else:
+        raise Exception('error: unsupported platform: %s' % sys.platform)
 
-if len(sys.argv) == 1 or not os.path.exists(sys.argv[1]):
-    print ""
-    print "Usage: %s executable-file" % os.path.basename(sys.argv[0])
-    print ""
-    sys.exit(0)
+    return None
 
-if (sys.argv[1].endswith('.idb') or sys.argv[1].endswith('.i64')):
-    idb = os.path.abspath(sys.argv[1])
-    executable = None
-else:
-    idb = None # "-t"
-    executable = sys.argv[1]
-
-ida = 'idaq'
-
-def executable64(fp):
+def check_executable64(fp):
     stdout = subprocess.check_output(['file', fp])
     return '64-bit' in stdout.lower() or 'pe32+' in stdout.lower()
 
-def createDaemon(cwd, umask = 0222):
+def createDaemon(cwd, umask = 0022):
     """Detach a process from the controlling terminal and run it in the
     background as a daemon.
     """
@@ -140,13 +137,90 @@ def createDaemon(cwd, umask = 0222):
         # and the parent branch(es) of a daemon use _exit().
         os._exit(0)   # Exit parent of the first child.
 
-if (idb and idb.endswith('.i64')) or (executable and executable64(executable)):
-    ida += "64"
+def usage():
+    print("""
+usage:
+    
+    $ ida [options] <binary> [extra arguments for ida]
+    $ ida [options] <idb file> [extra arguments for ida]
 
-args = [os.path.join(IDA_PATH, ida), idb or executable]
-print ' '.join(args)
+options:
+    
+    -h, --help              help page, you are reading this now!
+    -s, --sel               select ida binary, can be one of 'q', 'q64', 'l', 'l64', 'w', 'w64'
+""")
 
-createDaemon(None)
+def cmdline(args, IDA_PATH):
+    import getopt
+    try:
+        opts, args = getopt.getopt(args, 'hs:', ['help', 'sel='])
+    except getopt.GetoptError as err:
+        print 'argument error:', err
+        usage()
+        sys.exit(10)
 
-os.execv(args[0], args)
+    ida_version = None  # means auto selection by file attribute
+    for o, a in opts:
+        if o in ('-h', '--help'):
+            usage()
+            sys.exit(0)
+        elif o in ('-s', '--sel'):
+            ida_version = a
+
+    target = args[0]
+    extra_argument = None
+
+    if len(args) > 1:
+        extra_argument = args[1:]
+
+    if (target.endswith('.idb') or target.endswith('.i64')):
+        idb = os.path.abspath(target)
+        executable = None
+    else:
+        idb = None # "-t"
+        executable = target
+
+    if ida_version:
+        ida = check_ida(IDA_PATH, version=ida_version)
+    else:
+        if (idb and idb.endswith('.i64')) or (executable and check_executable64(executable)):
+            ida = check_ida(IDA_PATH, version="q64")
+        else:
+            ida = check_ida(IDA_PATH)
+
+    exec_args = [ida, idb or executable]
+
+    if 'linux' in sys.platform:
+        exec_args.insert(0, 'wine')
+
+    if extra_argument:
+        exec_args = exec_args[:-1] + extra_argument + [exec_args[-1]]
+
+    print repr(exec_args)
+    createDaemon(None)
+
+    os.execvp(exec_args[0], exec_args)
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        usage()
+        sys.exit(0)
+
+    # find IDA_PATH, in which contains idaq/idaq64 executable
+    IDA_PATH = os.environ.get('IDA_PATH', None)
+    if not check_ida(IDA_PATH):
+        IDA_PATH = None
+
+    if not IDA_PATH:
+        try:
+            IDA_PATH = guess_ida_installation()
+        except Exception as ex:
+            log(str(ex), 'red')
+            sys.exit(10)
+
+    if not check_ida(IDA_PATH):
+        log('error: IDA not found at %r, where did you install it?' % IDA_PATH, 'red')
+        sys.exit(12)
+
+    cmdline(sys.argv[1:], IDA_PATH)
 
